@@ -724,3 +724,4 @@ export function getPopularTools(limit = 6): ToolDefinition[] {
 export function getRecentlyAddedTools(limit = 6): ToolDefinition[] {
   return toolsConfig.filter((t) => t.isNew).slice(0, limit);
 }
+

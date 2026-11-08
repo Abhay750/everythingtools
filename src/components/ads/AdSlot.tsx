@@ -69,3 +69,4 @@ export function AdSlot({ slotKey, className }: AdSlotProps) {
     </aside>
   );
 }
+

@@ -73,3 +73,4 @@ export function ToolCard({ tool, className }: ToolCardProps) {
     </Link>
   );
 }
+

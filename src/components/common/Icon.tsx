@@ -15,3 +15,4 @@ export function Icon({ name, className = "w-5 h-5", size = 20, ...props }: IconP
 
   return <IconComponent className={className} size={size} {...props} />;
 }
+

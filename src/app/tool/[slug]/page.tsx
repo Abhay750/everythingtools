@@ -16,6 +16,8 @@ interface ToolPageProps {
   params: Promise<{ slug: string }>;
 }
 
+export const dynamicParams = false;
+
 export async function generateStaticParams() {
   return toolsConfig.map((tool) => ({
     slug: tool.slug,

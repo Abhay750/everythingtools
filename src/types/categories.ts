@@ -21,3 +21,4 @@ export interface ToolCategory {
   subcategories: string[];
   featured: boolean;
 }
+

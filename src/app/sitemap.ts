@@ -3,6 +3,8 @@ import { siteConfig } from "@/config/site.config";
 import { categoriesConfig } from "@/config/categories.config";
 import { toolsConfig } from "@/config/tools.config";
 
+export const dynamic = "force-static";
+
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = siteConfig.url;
 
@@ -64,3 +66,4 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   return [...staticRoutes, ...categoryRoutes, ...toolRoutes];
 }
+

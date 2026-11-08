@@ -13,6 +13,8 @@ interface CategoryPageProps {
   params: Promise<{ slug: string }>;
 }
 
+export const dynamicParams = false;
+
 export async function generateStaticParams() {
   return categoriesConfig.map((category) => ({
     slug: category.slug,
@@ -147,3 +149,4 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
     </>
   );
 }
+

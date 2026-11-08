@@ -38,3 +38,4 @@ export function QuickPills({ className }: QuickPillsProps) {
     </div>
   );
 }
+

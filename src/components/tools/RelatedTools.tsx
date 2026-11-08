@@ -28,3 +28,4 @@ export function RelatedTools({ currentTool }: RelatedToolsProps) {
     </section>
   );
 }
+

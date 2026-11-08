@@ -60,3 +60,4 @@ export function ToolFaq({ toolName, faqs }: ToolFaqProps) {
     </section>
   );
 }
+

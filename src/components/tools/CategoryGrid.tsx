@@ -21,3 +21,4 @@ export function CategoryGrid({ categories, className }: CategoryGridProps) {
     </div>
   );
 }
+
