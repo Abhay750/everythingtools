@@ -6,6 +6,8 @@ import { siteConfig } from "@/config/site.config";
 import { Breadcrumbs } from "@/components/common/Breadcrumbs";
 import { ToolHeader } from "@/components/tools/ToolHeader";
 import { SampleCounterTool } from "@/components/tools/SampleCounterTool";
+import { MergePdfTool } from "@/components/tools/MergePdfTool";
+import { CompressPdfTool } from "@/components/tools/CompressPdfTool";
 import { ToolPlaceholderWorkspace } from "@/components/tools/ToolPlaceholderWorkspace";
 import { ToolGuide } from "@/components/tools/ToolGuide";
 import { ToolFaq } from "@/components/tools/ToolFaq";
@@ -147,6 +149,10 @@ export default async function ToolPage({ params }: ToolPageProps) {
         <section className="pt-2">
           {tool.slug === "word-counter" ? (
             <SampleCounterTool />
+          ) : tool.slug === "merge-pdf" ? (
+            <MergePdfTool />
+          ) : tool.slug === "compress-pdf" ? (
+            <CompressPdfTool />
           ) : (
             <ToolPlaceholderWorkspace tool={tool} />
           )}

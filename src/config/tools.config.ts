@@ -340,9 +340,9 @@ export const toolsConfig: ToolDefinition[] = [
     slug: "compress-pdf",
     name: "Compress PDF",
     category: "pdf-tools",
-    shortDescription: "Reduce PDF document file size while preserving high visual text and image quality.",
+    shortDescription: "Reduce PDF file size by converting pages into optimized compressed images.",
     description:
-      "Compress large PDF documents for faster email sending and online form submissions. Strips redundant metadata and optimizes embedded images directly on your machine.",
+      "Compress PDF documents directly in your browser. This tool converts PDF pages into compressed images, reducing file size for scanned paperwork and image-heavy files. Because pages are converted to images, text extraction and searchability are not preserved, and vector text or already-optimized files may increase in size.",
     iconName: "Minimize2",
     isPopular: true,
     isNew: false,
@@ -351,31 +351,43 @@ export const toolsConfig: ToolDefinition[] = [
     tags: ["pdf", "compress", "shrink-pdf", "optimize-pdf", "reduce-size"],
     keywords: ["compress pdf", "reduce pdf size", "shrink pdf online", "pdf size reducer"],
     features: [
-      "Adjustable compression levels: Extreme, Recommended, and High Quality",
-      "Retains crisp vector text and clickable hyperlinks",
-      "Instant percentage file size savings readout",
+      "Three distinct compression presets: Strong Compression, Recommended, and High Quality",
+      "100% browser-side processing without uploading files to remote servers",
+      "Transparent reporting: shows exact space saved and alerts when a file increases in size",
+      "Best suited for scanned contracts, receipts, photo documents, and image-heavy PDFs",
     ],
     howToUse: [
       {
         step: 1,
         title: "Select PDF",
-        description: "Drop your PDF into the compression workspace.",
+        description: "Choose or drop the PDF file you wish to compress from your device.",
       },
       {
         step: 2,
-        title: "Choose optimization level",
-        description: "Select your desired balance between file size reduction and image clarity.",
+        title: "Choose compression preset",
+        description: "Select Strong Compression, Recommended, or High Quality based on your image clarity and file size goals.",
       },
       {
         step: 3,
-        title: "Download compressed file",
-        description: "Save the optimized file instantly.",
+        title: "Compress & Download",
+        description: "Click 'Compress PDF' and download your processed document.",
       },
     ],
     faqs: [
       {
+        question: "Will text in the compressed PDF still be selectable or searchable?",
+        answer:
+          "No. This tool rasterizes PDF pages into optimized images to achieve file-size reduction. Text, hyperlinks, fillable form fields, and document annotations will not remain interactive or selectable in the output PDF. Always keep your original document.",
+      },
+      {
+        question: "Why did my PDF file size increase instead of decrease?",
+        answer:
+          "PDFs that consist of lean vector text or are already heavily compressed will often increase in size when converted into image streams. Size reduction is primarily achieved on documents containing uncompressed photos, camera scans, or high-resolution graphic assets.",
+      },
+      {
         question: "How much size reduction can I expect?",
-        answer: "PDFs containing high-resolution scanned graphics typically see 50% to 80% reduction.",
+        answer:
+          "Reduction depends entirely on document contents. High-resolution scanned documents and photo-heavy PDFs typically see substantial size reduction, while already-optimized PDFs or pure text files will see little to no reduction.",
       },
     ],
     rating: { score: 4.8, count: 1840 },
