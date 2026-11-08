@@ -351,26 +351,28 @@ export const toolsConfig: ToolDefinition[] = [
     tags: ["pdf", "compress", "shrink-pdf", "optimize-pdf", "reduce-size"],
     keywords: ["compress pdf", "reduce pdf size", "shrink pdf online", "pdf size reducer"],
     features: [
-      "Three distinct compression presets: Strong Compression, Recommended, and High Quality",
+      "Target file size control: specify exact size targets in KB or MB with quick presets (100 KB, 500 KB, 1 MB, 2 MB, 5 MB)",
+      "Three distinct visual quality levels: Higher Visual Quality, Recommended Balance, and Smaller File Size",
+      "Interactive first-page preview to inspect visual sharpness and legibility before processing",
       "100% browser-side processing without uploading files to remote servers",
-      "Transparent reporting: shows exact space saved and alerts when a file increases in size",
+      "Transparent reporting: shows exact space saved, actual vs target size, and alerts when files do not shrink",
       "Best suited for scanned contracts, receipts, photo documents, and image-heavy PDFs",
     ],
     howToUse: [
       {
         step: 1,
         title: "Select PDF",
-        description: "Choose or drop the PDF file you wish to compress from your device.",
+        description: "Choose or drop the PDF file you wish to compress from your local device.",
       },
       {
         step: 2,
-        title: "Choose compression preset",
-        description: "Select Strong Compression, Recommended, or High Quality based on your image clarity and file size goals.",
+        title: "Set Target Size or Quality",
+        description: "Specify your desired file size in KB/MB or select a visual quality level with the first-page preview.",
       },
       {
         step: 3,
         title: "Compress & Download",
-        description: "Click 'Compress PDF' and download your processed document.",
+        description: "Click 'Compress PDF', inspect the honest size report, and download your optimized document.",
       },
     ],
     faqs: [

@@ -1,5 +1,6 @@
 import { PDFDocument } from "pdf-lib";
 
+export type CompressionMode = "target-size" | "preset";
 export type CompressionPreset = "high" | "recommended" | "strong";
 
 export interface CompressionSettings {
@@ -9,44 +10,74 @@ export interface CompressionSettings {
   scale: number;
   quality: number;
   description: string;
+  tradeoff: string;
   recommendedFor: string;
 }
 
 export const COMPRESSION_PRESETS: Record<CompressionPreset, CompressionSettings> = {
   high: {
     id: "high",
-    name: "High Quality",
+    name: "Higher Visual Quality",
     badge: "Mild Compression",
     scale: 1.5,
     quality: 0.85,
-    description: "Higher rendering resolution and higher image quality. Produces the clearest output but results in larger file sizes.",
-    recommendedFor: "Documents with detailed charts, small graphics, or where visual clarity is the priority.",
+    description: "Renders at 1.5x resolution with light compression. Retains crisp lines, sharp text edges, and fine details.",
+    tradeoff: "Produces higher visual clarity, but results in a larger output file size.",
+    recommendedFor: "Documents with detailed charts, small graphics, architectural plans, or presentations.",
   },
   recommended: {
     id: "recommended",
-    name: "Recommended",
+    name: "Recommended Balance",
     badge: "Balanced",
-    scale: 1.2,
+    scale: 1.15,
     quality: 0.70,
-    description: "Balanced rendering resolution and moderate image compression. Delivers practical file-size reduction while keeping text and images clearly readable.",
-    recommendedFor: "Standard everyday documents, scanned agreements, and email attachments.",
+    description: "Standard resolution rendering with moderate JPEG compression. Balances file size reduction with readable clarity.",
+    tradeoff: "Delivers substantial file size savings while keeping text and images clearly readable.",
+    recommendedFor: "Standard everyday documents, scanned agreements, invoices, and email attachments.",
   },
   strong: {
     id: "strong",
-    name: "Strong Compression",
+    name: "Smaller File Size",
     badge: "Maximum Reduction",
-    scale: 0.9,
+    scale: 0.85,
     quality: 0.50,
-    description: "Lower rendering resolution and higher image compression. Minimizes file size as much as possible at the expense of noticeable image softening.",
-    recommendedFor: "Strict upload forms or email size limits where file size matters more than fine image detail.",
+    description: "Lower resolution rendering with aggressive image compression. Minimizes file size as much as possible.",
+    tradeoff: "Minimizes file size, but causes noticeable image softening and minor compression artifacts.",
+    recommendedFor: "Strict upload forms, government portals, or email services with low attachment size limits.",
   },
 };
+
+export interface TargetSearchProfile {
+  id: string;
+  name: string;
+  scale: number;
+  quality: number;
+}
+
+export const TARGET_SEARCH_PROFILES: TargetSearchProfile[] = [
+  { id: "p1", name: "Ultra High Quality", scale: 1.50, quality: 0.85 },
+  { id: "p2", name: "High Quality", scale: 1.35, quality: 0.80 },
+  { id: "p3", name: "Balanced High", scale: 1.20, quality: 0.75 },
+  { id: "p4", name: "Recommended Balance", scale: 1.10, quality: 0.68 },
+  { id: "p5", name: "Medium Compression", scale: 0.95, quality: 0.60 },
+  { id: "p6", name: "Strong Compression", scale: 0.82, quality: 0.50 },
+  { id: "p7", name: "Very Strong Compression", scale: 0.70, quality: 0.42 },
+  { id: "p8", name: "Maximum Reduction", scale: 0.55, quality: 0.35 },
+];
+
+export interface CompressionOptions {
+  mode: CompressionMode;
+  preset?: CompressionPreset;
+  targetSizeBytes?: number;
+}
 
 export interface CompressionProgress {
   current: number;
   total: number;
   stage: string;
   percent: number;
+  pass?: number;
+  totalPasses?: number;
 }
 
 export interface CompressionResult {
@@ -59,17 +90,160 @@ export interface CompressionResult {
   durationSeconds: number;
   pageCount: number;
   isSmaller: boolean;
+  mode: CompressionMode;
+  targetSizeBytes?: number;
+  targetAchieved?: boolean;
+  effectiveScale: number;
+  effectiveQuality: number;
+  passCount: number;
+  qualityProfileName: string;
 }
 
+export interface PagePreviewResult {
+  dataUrl: string;
+  width: number;
+  height: number;
+  estimatedPageBytes: number;
+  scale: number;
+  quality: number;
+}
+
+/**
+ * Renders a single page to a JPEG Data URL to estimate quality and byte size.
+ */
+export async function generatePagePreview(
+  file: File,
+  pageNumber: number = 1,
+  scale: number = 1.0,
+  quality: number = 0.70
+): Promise<PagePreviewResult> {
+  const pdfjsLib = await import("pdfjs-dist");
+  if (typeof window !== "undefined") {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+  }
+
+  const arrayBuffer = await file.arrayBuffer();
+  const loadingTask = pdfjsLib.getDocument({
+    data: arrayBuffer,
+    cMapUrl: "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/",
+    cMapPacked: true,
+  });
+  const pdfDoc = await loadingTask.promise;
+
+  const page = await pdfDoc.getPage(Math.min(pageNumber, pdfDoc.numPages));
+  const renderViewport = page.getViewport({ scale });
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.floor(renderViewport.width));
+  canvas.height = Math.max(1, Math.floor(renderViewport.height));
+
+  const ctx = canvas.getContext("2d", { alpha: false });
+  if (!ctx) {
+    throw new Error("Failed to create canvas 2D rendering context.");
+  }
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  await page.render({
+    canvasContext: ctx,
+    viewport: renderViewport,
+  }).promise;
+
+  const dataUrl = canvas.toDataURL("image/jpeg", quality);
+  const estimatedPageBytes = Math.round(dataUrl.length * 0.75);
+  const width = canvas.width;
+  const height = canvas.height;
+
+  // Clean up canvas memory
+  canvas.width = 0;
+  canvas.height = 0;
+
+  return {
+    dataUrl,
+    width,
+    height,
+    estimatedPageBytes,
+    scale,
+    quality,
+  };
+}
+
+/**
+ * Internal helper to render and build a complete compressed PDF document with given scale & quality.
+ */
+async function buildCompressedPdf(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pdfDoc: any,
+  scale: number,
+  quality: number,
+  onPageProgress?: (currentPage: number, totalPages: number) => void
+): Promise<{ pdfBytes: Uint8Array; pageCount: number }> {
+  const numPages = pdfDoc.numPages;
+  const outputPdf = await PDFDocument.create();
+
+  for (let i = 1; i <= numPages; i++) {
+    onPageProgress?.(i, numPages);
+
+    const page = await pdfDoc.getPage(i);
+    const originalViewport = page.getViewport({ scale: 1.0 });
+    const renderViewport = page.getViewport({ scale });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.floor(renderViewport.width));
+    canvas.height = Math.max(1, Math.floor(renderViewport.height));
+
+    const ctx = canvas.getContext("2d", { alpha: false });
+    if (!ctx) {
+      throw new Error("Failed to create canvas 2D rendering context.");
+    }
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    await page.render({
+      canvasContext: ctx,
+      viewport: renderViewport,
+    }).promise;
+
+    const jpegDataUrl = canvas.toDataURL("image/jpeg", quality);
+
+    // Immediately release canvas memory
+    canvas.width = 0;
+    canvas.height = 0;
+
+    const embeddedImage = await outputPdf.embedJpg(jpegDataUrl);
+    const outputPage = outputPdf.addPage([originalViewport.width, originalViewport.height]);
+    outputPage.drawImage(embeddedImage, {
+      x: 0,
+      y: 0,
+      width: originalViewport.width,
+      height: originalViewport.height,
+    });
+  }
+
+  const pdfBytes = await outputPdf.save({ useObjectStreams: true });
+  return { pdfBytes, pageCount: numPages };
+}
+
+/**
+ * Main PDF Compression Engine supporting both quality presets and measured target-size convergence.
+ */
 export async function compressPdfDocument(
   file: File,
-  preset: CompressionPreset = "recommended",
+  optionsOrPreset: CompressionOptions | CompressionPreset = "recommended",
   onProgress?: (progress: CompressionProgress) => void
 ): Promise<CompressionResult> {
   const startTime = Date.now();
-  const presetConfig = COMPRESSION_PRESETS[preset];
 
-  // 1. Dynamic import of PDF.js to ensure purely client-side browser execution
+  const options: CompressionOptions =
+    typeof optionsOrPreset === "string"
+      ? { mode: "preset", preset: optionsOrPreset }
+      : optionsOrPreset;
+
+  const mode = options.mode || "preset";
+
+  // 1. Dynamic import of PDF.js
   onProgress?.({
     current: 0,
     total: 100,
@@ -119,87 +293,203 @@ export async function compressPdfDocument(
     throw new Error("The selected PDF document contains 0 pages.");
   }
 
-  // 3. Initialize output PDF via pdf-lib
-  const outputPdf = await PDFDocument.create();
+  let finalBytes: Uint8Array;
+  let effectiveScale: number;
+  let effectiveQuality: number;
+  let qualityProfileName: string;
+  let targetAchieved: boolean | undefined = undefined;
+  let passCount = 1;
 
-  // 4. Process each page sequentially
-  for (let i = 1; i <= numPages; i++) {
-    const pagePercent = Math.round(15 + ((i - 1) / numPages) * 75);
+  if (mode === "preset") {
+    // Mode A: Fixed Preset Mode
+    const presetKey = options.preset || "recommended";
+    const presetConfig = COMPRESSION_PRESETS[presetKey];
+    effectiveScale = presetConfig.scale;
+    effectiveQuality = presetConfig.quality;
+    qualityProfileName = presetConfig.name;
+
+    const buildResult = await buildCompressedPdf(
+      pdfDoc,
+      effectiveScale,
+      effectiveQuality,
+      (curr, total) => {
+        const percent = Math.round(15 + ((curr - 1) / total) * 75);
+        onProgress?.({
+          current: curr,
+          total,
+          stage: `Compressing page ${curr} of ${total} (${presetConfig.name})...`,
+          percent,
+          pass: 1,
+          totalPasses: 1,
+        });
+      }
+    );
+
+    finalBytes = buildResult.pdfBytes;
+  } else {
+    // Mode B: Target Size Mode
+    const targetBytes = options.targetSizeBytes || Math.round(file.size * 0.8);
+    const pdfOverheadEst = 2500 + numPages * 400;
+
     onProgress?.({
-      current: i,
+      current: 0,
       total: numPages,
-      stage: `Recompressing page ${i} of ${numPages} (${presetConfig.name})...`,
-      percent: pagePercent,
+      stage: "Analyzing document pages to calculate optimal compression...",
+      percent: 15,
+      pass: 1,
+      totalPasses: 1,
     });
 
-    const page = await pdfDoc.getPage(i);
-    const originalViewport = page.getViewport({ scale: 1.0 });
-    const renderViewport = page.getViewport({ scale: presetConfig.scale });
+    // Calibration: sample Page 1 to estimate JPEG compression size
+    const samplePage = await pdfDoc.getPage(1);
+    let chosenProfile = TARGET_SEARCH_PROFILES[TARGET_SEARCH_PROFILES.length - 1]; // fallback to max reduction
 
-    // Render page to offscreen canvas
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.floor(renderViewport.width));
-    canvas.height = Math.max(1, Math.floor(renderViewport.height));
+    for (const profile of TARGET_SEARCH_PROFILES) {
+      const renderViewport = samplePage.getViewport({ scale: profile.scale });
+      const testCanvas = document.createElement("canvas");
+      testCanvas.width = Math.max(1, Math.floor(renderViewport.width));
+      testCanvas.height = Math.max(1, Math.floor(renderViewport.height));
 
-    const ctx = canvas.getContext("2d", { alpha: false });
-    if (!ctx) {
-      throw new Error("Failed to create canvas 2D rendering context.");
+      const ctx = testCanvas.getContext("2d", { alpha: false });
+      if (ctx) {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, testCanvas.width, testCanvas.height);
+        await samplePage.render({ canvasContext: ctx, viewport: renderViewport }).promise;
+        const testJpeg = testCanvas.toDataURL("image/jpeg", profile.quality);
+        const estSampleBytes = Math.round(testJpeg.length * 0.75);
+        const estTotalBytes = pdfOverheadEst + estSampleBytes * numPages;
+
+        testCanvas.width = 0;
+        testCanvas.height = 0;
+
+        if (estTotalBytes <= targetBytes) {
+          chosenProfile = profile;
+          break; // First match is highest quality profile meeting target
+        }
+      }
     }
 
-    // Set white background for transparent pages
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    effectiveScale = chosenProfile.scale;
+    effectiveQuality = chosenProfile.quality;
+    qualityProfileName = chosenProfile.name;
 
-    await page.render({
-      canvasContext: ctx,
-      viewport: renderViewport,
-    }).promise;
+    // Pass 1: Build document with chosen profile
+    const pass1 = await buildCompressedPdf(
+      pdfDoc,
+      effectiveScale,
+      effectiveQuality,
+      (curr, total) => {
+        const percent = Math.round(20 + ((curr - 1) / total) * 70);
+        onProgress?.({
+          current: curr,
+          total,
+          stage: `Compressing page ${curr} of ${total} (${chosenProfile.name})...`,
+          percent,
+          pass: 1,
+          totalPasses: 1,
+        });
+      }
+    );
 
-    // Convert to compressed JPEG data URL
-    const jpegDataUrl = canvas.toDataURL("image/jpeg", presetConfig.quality);
+    const pass1Size = pass1.pdfBytes.byteLength;
 
-    // Free canvas memory immediately
-    canvas.width = 0;
-    canvas.height = 0;
+    if (pass1Size <= targetBytes) {
+      // Target met on Pass 1!
+      finalBytes = pass1.pdfBytes;
+      targetAchieved = true;
+      passCount = 1;
+    } else {
+      // Pass 1 exceeded target (e.g. later pages had more complex images than page 1)
+      // Check if we can do an adjustment pass
+      if (chosenProfile.id === "p8") {
+        // Already at maximum reduction
+        finalBytes = pass1.pdfBytes;
+        targetAchieved = false;
+        passCount = 1;
+      } else {
+        // Run Pass 2: Calibrated adjustment
+        passCount = 2;
+        const targetImgBytes = Math.max(1000, targetBytes - pdfOverheadEst);
+        const actualImgBytes = Math.max(1000, pass1Size - pdfOverheadEst);
+        const ratio = targetImgBytes / actualImgBytes;
 
-    // Embed into output PDF
-    const embeddedImage = await outputPdf.embedJpg(jpegDataUrl);
-    const outputPage = outputPdf.addPage([originalViewport.width, originalViewport.height]);
-    outputPage.drawImage(embeddedImage, {
-      x: 0,
-      y: 0,
-      width: originalViewport.width,
-      height: originalViewport.height,
-    });
+        const scaleFactor = Math.sqrt(Math.max(0.2, ratio * 0.90));
+        const adjustedScale = Math.max(0.50, Math.min(effectiveScale * scaleFactor, effectiveScale - 0.12));
+        const adjustedQuality = Math.max(0.35, Math.min(effectiveQuality * Math.sqrt(ratio), effectiveQuality - 0.08));
+
+        effectiveScale = parseFloat(adjustedScale.toFixed(2));
+        effectiveQuality = parseFloat(adjustedQuality.toFixed(2));
+        qualityProfileName = "Fine-Tuned Target Profile";
+
+        onProgress?.({
+          current: 0,
+          total: numPages,
+          stage: "Fine-tuning compression to achieve exact target size...",
+          percent: 60,
+          pass: 2,
+          totalPasses: 2,
+        });
+
+        const pass2 = await buildCompressedPdf(
+          pdfDoc,
+          effectiveScale,
+          effectiveQuality,
+          (curr, total) => {
+            const percent = Math.round(60 + ((curr - 1) / total) * 35);
+            onProgress?.({
+              current: curr,
+              total,
+              stage: `Fine-tuning page ${curr} of ${total} (Pass 2)...`,
+              percent,
+              pass: 2,
+              totalPasses: 2,
+            });
+          }
+        );
+
+        const pass2Size = pass2.pdfBytes.byteLength;
+        finalBytes = pass2.pdfBytes;
+        targetAchieved = pass2Size <= targetBytes;
+      }
+    }
   }
 
-  // 5. Serialize with object streams optimization
+  // Finalize serialization
   onProgress?.({
     current: numPages,
     total: numPages,
-    stage: "Finalizing object streams and metadata compression...",
-    percent: 95,
+    stage: "Finalizing optimized PDF streams...",
+    percent: 98,
+    pass: passCount,
+    totalPasses: passCount,
   });
 
-  const compressedBytes = await outputPdf.save({ useObjectStreams: true });
-  const compressedBlob = new Blob([compressedBytes.buffer as ArrayBuffer], {
+  const compressedBlob = new Blob([finalBytes.buffer as ArrayBuffer], {
     type: "application/pdf",
   });
   const blobUrl = URL.createObjectURL(compressedBlob);
 
   const durationSeconds = parseFloat(((Date.now() - startTime) / 1000).toFixed(2));
   const originalSizeBytes = file.size;
-  const compressedSizeBytes = compressedBytes.byteLength;
+  const compressedSizeBytes = finalBytes.byteLength;
   const savedBytes = originalSizeBytes - compressedSizeBytes;
   const percentReduction =
-    originalSizeBytes > 0 ? parseFloat(((savedBytes / originalSizeBytes) * 100).toFixed(1)) : 0;
+    originalSizeBytes > 0 && savedBytes > 0
+      ? parseFloat(((savedBytes / originalSizeBytes) * 100).toFixed(1))
+      : 0;
   const isSmaller = savedBytes > 0;
+
+  // If the document grew larger than the original, target is NOT achieved even if it met a loose target
+  const finalTargetAchieved =
+    mode === "target-size" ? (isSmaller && targetAchieved === true) : undefined;
 
   onProgress?.({
     current: numPages,
     total: numPages,
     stage: "Compression complete!",
     percent: 100,
+    pass: passCount,
+    totalPasses: passCount,
   });
 
   return {
@@ -212,6 +502,12 @@ export async function compressPdfDocument(
     durationSeconds,
     pageCount: numPages,
     isSmaller,
+    mode,
+    targetSizeBytes: options.targetSizeBytes,
+    targetAchieved: finalTargetAchieved,
+    effectiveScale,
+    effectiveQuality,
+    passCount,
+    qualityProfileName,
   };
 }
-
